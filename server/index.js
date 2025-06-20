@@ -23,90 +23,95 @@ app.use(express.json());
 const db = new sqlite3.Database(':memory:');
 
 // Initialize database with schema and sample data
-const initializeDatabase = () => {
-  // Create tables
-  db.serialize(() => {
-    // Organizations table
-    db.run(`
-      CREATE TABLE Organizations (
-        organization_id VARCHAR(50) PRIMARY KEY,
-        org_name VARCHAR(255) NOT NULL,
-        subscription_plan VARCHAR(50),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+const initializeDatabase = async () => {
+  await new Promise((resolve, reject) => {
+    db.serialize(() => {
+      // Organizations table
+      db.run(`
+        CREATE TABLE Organizations (
+          organization_id VARCHAR(50) PRIMARY KEY,
+          org_name VARCHAR(255) NOT NULL,
+          subscription_plan VARCHAR(50),
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
 
-    // Users table
-    db.run(`
-      CREATE TABLE Users (
-        user_id VARCHAR(50) PRIMARY KEY,
-        organization_id VARCHAR(50) NOT NULL,
-        first_name VARCHAR(100) NOT NULL,
-        last_name VARCHAR(100) NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        role VARCHAR(100) NOT NULL,
-        manager_id VARCHAR(50),
-        date_of_joining DATE NOT NULL,
-        department VARCHAR(100),
-        location VARCHAR(100),
-        FOREIGN KEY (organization_id) REFERENCES Organizations(organization_id),
-        FOREIGN KEY (manager_id) REFERENCES Users(user_id)
-      )
-    `);
+      // Users table
+      db.run(`
+        CREATE TABLE Users (
+          user_id VARCHAR(50) PRIMARY KEY,
+          organization_id VARCHAR(50) NOT NULL,
+          first_name VARCHAR(100) NOT NULL,
+          last_name VARCHAR(100) NOT NULL,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password_hash VARCHAR(255) NOT NULL,
+          role VARCHAR(100) NOT NULL,
+          manager_id VARCHAR(50),
+          date_of_joining DATE NOT NULL,
+          department VARCHAR(100),
+          location VARCHAR(100),
+          FOREIGN KEY (organization_id) REFERENCES Organizations(organization_id),
+          FOREIGN KEY (manager_id) REFERENCES Users(user_id)
+        )
+      `);
 
-    // LeaveBalances table
-    db.run(`
-      CREATE TABLE LeaveBalances (
-        balance_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        organization_id VARCHAR(50) NOT NULL,
-        user_id VARCHAR(50) NOT NULL,
-        leave_type VARCHAR(50) NOT NULL,
-        total_allotted INTEGER NOT NULL,
-        leaves_taken INTEGER NOT NULL DEFAULT 0,
-        leaves_pending_approval INTEGER NOT NULL DEFAULT 0,
-        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (organization_id) REFERENCES Organizations(organization_id),
-        FOREIGN KEY (user_id) REFERENCES Users(user_id)
-      )
-    `);
+      // LeaveBalances table
+      db.run(`
+        CREATE TABLE LeaveBalances (
+          balance_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          organization_id VARCHAR(50) NOT NULL,
+          user_id VARCHAR(50) NOT NULL,
+          leave_type VARCHAR(50) NOT NULL,
+          total_allotted INTEGER NOT NULL,
+          leaves_taken INTEGER NOT NULL DEFAULT 0,
+          leaves_pending_approval INTEGER NOT NULL DEFAULT 0,
+          last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (organization_id) REFERENCES Organizations(organization_id),
+          FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        )
+      `);
 
-    // CompanyPolicies table
-    db.run(`
-      CREATE TABLE CompanyPolicies (
-        policy_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        organization_id VARCHAR(50) NOT NULL,
-        policy_title VARCHAR(255) NOT NULL,
-        policy_category VARCHAR(100),
-        policy_content TEXT NOT NULL,
-        last_reviewed DATE,
-        keywords TEXT,
-        FOREIGN KEY (organization_id) REFERENCES Organizations(organization_id)
-      )
-    `);
+      // CompanyPolicies table
+      db.run(`
+        CREATE TABLE CompanyPolicies (
+          policy_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          organization_id VARCHAR(50) NOT NULL,
+          policy_title VARCHAR(255) NOT NULL,
+          policy_category VARCHAR(100),
+          policy_content TEXT NOT NULL,
+          last_reviewed DATE,
+          keywords TEXT,
+          FOREIGN KEY (organization_id) REFERENCES Organizations(organization_id)
+        )
+      `);
 
-    // PayrollData table
-    db.run(`
-      CREATE TABLE PayrollData (
-        payroll_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        organization_id VARCHAR(50) NOT NULL,
-        user_id VARCHAR(50) NOT NULL,
-        base_salary DECIMAL(10, 2) NOT NULL,
-        HRA DECIMAL(10, 2),
-        conveyance_allowance DECIMAL(10, 2),
-        medical_allowance DECIMAL(10, 2),
-        pf_deduction DECIMAL(10, 2),
-        esi_deduction DECIMAL(10, 2),
-        professional_tax DECIMAL(10, 2),
-        ctc DECIMAL(10, 2) NOT NULL,
-        FOREIGN KEY (organization_id) REFERENCES Organizations(organization_id),
-        FOREIGN KEY (user_id) REFERENCES Users(user_id)
-      )
-    `);
-
-    // Insert sample data
-    insertSampleData();
+      // PayrollData table
+      db.run(`
+        CREATE TABLE PayrollData (
+          payroll_id INTEGER PRIMARY KEY AUTOINCREMENT,
+          organization_id VARCHAR(50) NOT NULL,
+          user_id VARCHAR(50) NOT NULL,
+          base_salary DECIMAL(10, 2) NOT NULL,
+          HRA DECIMAL(10, 2),
+          conveyance_allowance DECIMAL(10, 2),
+          medical_allowance DECIMAL(10, 2),
+          pf_deduction DECIMAL(10, 2),
+          esi_deduction DECIMAL(10, 2),
+          professional_tax DECIMAL(10, 2),
+          ctc DECIMAL(10, 2) NOT NULL,
+          FOREIGN KEY (organization_id) REFERENCES Organizations(organization_id),
+          FOREIGN KEY (user_id) REFERENCES Users(user_id)
+        )
+      `, (err) => {
+        if (err) {
+          return reject(err);
+        }
+        resolve();
+      });
+    });
   });
+
+  await insertSampleData();
 };
 
 const insertSampleData = async () => {
@@ -172,6 +177,7 @@ const insertSampleData = async () => {
     db.run('INSERT INTO CompanyPolicies (organization_id, policy_title, policy_category, policy_content, last_reviewed, keywords) VALUES (?, ?, ?, ?, ?, ?)', policy);
   });
 
+  
   // Payroll Data
   const payrollData = [
     ['TECHCORP_IN', 'TCI_MGR001', 80000.00, 40000.00, 8000.00, 3000.00, 9600.00, 0.00, 200.00, 150000.00],
@@ -508,8 +514,15 @@ app.get('/api/profile', authenticateToken, (req, res) => {
 });
 
 // Initialize database and start server
-initializeDatabase();
+const startServer = async () => {
+  await initializeDatabase();
+  app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+};
 
-app.listen(PORT, () => {
-  console.log(`VipraCo HR Assistant server running on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production') {
+  startServer();
+}
+
+export default app;
